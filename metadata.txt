@@ -1,7 +1,7 @@
 [general]
 name=Treesta QueryBuilder
 description=Create dynamic filters from attribute values and aliases
-version=0.0.1
+version=0.2.0
 qgisMinimumVersion=3.22
 author=Baumsicht
 email=mail@baumsicht.de
