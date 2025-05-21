@@ -1,12 +1,13 @@
 import json
+import random
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton,
     QTextEdit, QLineEdit, QWidget, QDateEdit, QFrame, QFileDialog,
-    QMessageBox, QCompleter, QScrollArea
+    QMessageBox, QCompleter, QScrollArea, QToolButton, QMenu
 )
 from qgis.PyQt.QtCore import Qt, QDate
 from qgis.PyQt.QtGui import QGuiApplication
-from qgis.core import QgsProject, QgsField, QgsVectorLayer
+from qgis.core import QgsProject, QgsField, QgsVectorLayer, QgsFeatureRequest
 
 
 class QueryBuilderDialog(QDialog):
@@ -25,13 +26,11 @@ class QueryBuilderDialog(QDialog):
             | Qt.WindowMinimizeButtonHint
             | Qt.WindowMaximizeButtonHint
         )
-        # Optional direkt maximiert starten:
-        # self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
-        self.setWindowTitle("QueryBuilder  –  v0.2.5")
+        self.setWindowTitle("QueryBuilder  –  v0.2.8")
         self.layout = QVBoxLayout(self)
 
-        # --- Layer-Auswahl ---
+        # Layer-Auswahl
         hl_layer = QHBoxLayout()
         hl_layer.addWidget(QLabel("Layer:"))
         self.layer_combo = QComboBox()
@@ -46,7 +45,7 @@ class QueryBuilderDialog(QDialog):
         self.layer_combo.currentIndexChanged.connect(self.on_layer_change)
         self.layer = layer
 
-        # --- Speichern/Laden Buttons ---
+        # Save/Load Buttons
         hl_top = QHBoxLayout()
         btn_save = QPushButton("💾 Filter speichern")
         btn_load = QPushButton("📂 Filter laden")
@@ -57,7 +56,7 @@ class QueryBuilderDialog(QDialog):
         btn_save.clicked.connect(self.save_filter)
         btn_load.clicked.connect(self.load_filter)
 
-        # --- ScrollArea für Gruppen ---
+        # ScrollArea für Gruppen
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_content = QWidget()
@@ -66,7 +65,7 @@ class QueryBuilderDialog(QDialog):
         scroll.setWidget(scroll_content)
         self.layout.addWidget(scroll)
 
-        # --- Warn-Label bei UND-Falle ---
+        # Warn-Label bei UND-Falle
         self.warn_label = QLabel(
             "⚠️ Achtung: Alle Gruppen sind mit UND verknüpft –\n"
             "nur Datensätze, die alle Bedingungen erfüllen, bleiben übrig."
@@ -76,13 +75,13 @@ class QueryBuilderDialog(QDialog):
         self.warn_label.hide()
         self.layout.addWidget(self.warn_label)
 
-        # --- Ausdrucksvorschau ---
+        # Ausdrucksvorschau
         self.preview = QTextEdit()
         self.preview.setReadOnly(True)
         self.layout.addWidget(QLabel("Erzeugter Ausdruck:"))
         self.layout.addWidget(self.preview)
 
-        # --- Generate / Copy / Apply Buttons ---
+        # Generate / Copy / Apply Buttons
         btns = QHBoxLayout()
         btn_generate = QPushButton("Ausdruck erzeugen")
         btn_copy    = QPushButton("📋 Kopieren")
@@ -95,21 +94,18 @@ class QueryBuilderDialog(QDialog):
         btns.addWidget(btn_apply)
         self.layout.addLayout(btns)
 
-        # --- Hinweis am Fuß ---
+        # Hinweis am Fuß
         hint = QLabel("Hinweis: Bitte überprüfe den erzeugten Ausdruck auf Richtigkeit.")
         hint.setStyleSheet("color: #888888; font-size: 10pt;")
         hint.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(hint)
 
-        # --- Gruppen initial und globaler Button ---
+        # interne Gruppen-Liste & globaler Button
         self.groups = []
         self.add_group()
         btn_add_group = QPushButton("+ Gruppe hinzufügen")
         btn_add_group.clicked.connect(self.add_group)
-        self.layout.insertWidget(
-            self.layout.indexOf(self.warn_label) + 1,
-            btn_add_group
-        )
+        self.layout.insertWidget(self.layout.indexOf(self.warn_label) + 1, btn_add_group)
 
         self.update_warning()
 
@@ -130,19 +126,17 @@ class QueryBuilderDialog(QDialog):
 
     def create_input_widget(self, is_date, field_name=None):
         if is_date:
-            dt = QDateEdit()
-            dt.setCalendarPopup(True)
-            dt.setDisplayFormat("yyyy-MM-dd")
-            dt.setDate(QDate.currentDate())
+            dt = QDateEdit(); dt.setCalendarPopup(True)
+            dt.setDisplayFormat("yyyy-MM-dd"); dt.setDate(QDate.currentDate())
             return dt
         le = QLineEdit()
         if field_name:
             vals = {
-                str(feat[field_name])
-                for feat in self.layer.getFeatures()
+                feat[field_name]
+                for feat in self.layer.getFeatures(QgsFeatureRequest())
                 if feat[field_name] not in (None, '')
             }
-            comp = QCompleter(sorted(vals), self)
+            comp = QCompleter(sorted(str(v) for v in vals), self)
             comp.setCaseSensitivity(Qt.CaseInsensitive)
             le.setCompleter(comp)
         return le
@@ -163,8 +157,7 @@ class QueryBuilderDialog(QDialog):
 
     def add_group(self):
         grp = {}
-        frame = QFrame()
-        frame.setFrameShape(QFrame.StyledPanel)
+        frame = QFrame(); frame.setFrameShape(QFrame.StyledPanel)
         grp["frame"] = frame
         vbox = QVBoxLayout(frame)
         self.groups_container.addWidget(frame)
@@ -213,13 +206,30 @@ class QueryBuilderDialog(QDialog):
         inp2 = self.create_input_widget(False); inp2.hide()
         btn_del = QPushButton("❌"); btn_del.setToolTip("Diese Bedingung löschen")
 
+        # Werte-Button
+        btn_vals = QToolButton(); btn_vals.setText("▾")
+        menu = QMenu(btn_vals)
+        menu.addAction("Alle eindeutigen Werte")
+        menu.addAction("10 Stichproben")
+        menu.addAction("Nur verwendete Werte")
+        btn_vals.setMenu(menu); btn_vals.setPopupMode(QToolButton.InstantPopup)
+        hl.addWidget(btn_vals)
+        # immer aktuelles inp1 referenzieren
+        menu.triggered.connect(lambda action, b=blk:
+            self.load_field_values(action.text(), b["fld"].currentData(), b["in1"])
+        )
+
         for w in (fld, op, inp1, inp2, btn_del):
             hl.addWidget(w)
 
         container = QWidget(); container.setLayout(hl)
         group["conds"].addWidget(container)
 
-        blk.update({"fld": fld, "op": op, "in1": inp1, "in2": inp2, "del_btn": btn_del, "container": container})
+        blk.update({
+            "fld": fld, "op": op,
+            "in1": inp1, "in2": inp2,
+            "del_btn": btn_del, "container": container
+        })
         group["blocks"].append(blk)
 
         def update_widgets():
@@ -231,19 +241,17 @@ class QueryBuilderDialog(QDialog):
             blk["in1"] = self.create_input_widget(date_field, name)
             blk["in2"] = self.create_input_widget(date_field, name)
             blk["in2"].setVisible(oper == "zwischen")
-            hl.insertWidget(2, blk["in1"])
-            hl.insertWidget(3, blk["in2"])
+            hl.insertWidget(2, blk["in1"]); hl.insertWidget(3, blk["in2"])
 
         fld.currentIndexChanged.connect(update_widgets)
         op.currentTextChanged.connect(update_widgets)
         update_widgets()
 
-        def remove_line():
-            group["conds"].removeWidget(container)
-            container.deleteLater()
+        btn_del.clicked.connect(lambda: (
+            group["conds"].removeWidget(container),
+            container.deleteLater(),
             group["blocks"].remove(blk)
-
-        btn_del.clicked.connect(remove_line)
+        ))
 
 
     def duplicate_group(self, group):
@@ -257,10 +265,8 @@ class QueryBuilderDialog(QDialog):
             nb = new["blocks"][-1]
             nb["fld"].setCurrentIndex(ob["fld"].currentIndex())
             nb["op"].setCurrentIndex(ob["op"].currentIndex())
-
             t1 = ob["in1"].date().toString("yyyy-MM-dd") if hasattr(ob["in1"], "date") else ob["in1"].text()
             t2 = ob["in2"].date().toString("yyyy-MM-dd") if hasattr(ob["in2"], "date") else ob["in2"].text()
-
             if hasattr(nb["in1"], "setDate"):
                 nb["in1"].setDate(QDate.fromString(t1, "yyyy-MM-dd"))
             else:
@@ -337,7 +343,7 @@ class QueryBuilderDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(self, "Filter speichern", "", "JSON Files (*.json*)")
         if not path:
             return
-        data = {"version": "v0.2.5", "groups": []}
+        data = {"version": "v0.2.8", "groups": []}
         for grp in self.groups:
             grp_data = {"op": grp["op"].currentText(), "blocks": []}
             for blk in grp["blocks"]:
@@ -410,3 +416,30 @@ class QueryBuilderDialog(QDialog):
             self.warn_label.show()
         else:
             self.warn_label.hide()
+
+
+    def load_field_values(self, mode: str, field_name: str, lineedit: QLineEdit):
+        """
+        Füllt den Completer und zeigt ihn sofort an:
+          - Alle eindeutigen Werte
+          - 10 Stichproben
+          - Nur verwendete Werte (aktuelle Features)
+        """
+        req = QgsFeatureRequest()
+        distinct = {
+            feat[field_name]
+            for feat in self.layer.getFeatures(req)
+            if feat[field_name] not in (None, '')
+        }
+
+        if mode == "Alle eindeutigen Werte":
+            vals = distinct
+        elif mode == "10 Stichproben":
+            vals = set(random.sample(list(distinct), min(10, len(distinct))))
+        else:
+            vals = distinct
+
+        comp = QCompleter(sorted(str(v) for v in vals), self)
+        comp.setCaseSensitivity(Qt.CaseInsensitive)
+        lineedit.setCompleter(comp)
+        comp.complete()
