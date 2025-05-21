@@ -1,0 +1,8 @@
+[general]
+name=Treesta QueryBuilder
+description=Create dynamic filters from attribute values and aliases
+version=1.0
+qgisMinimumVersion=3.22
+author=Treesta
+email=mail@treesta.net
+about=This plugin helps users to create dynamic QGIS filter expressions based on field values and aliases.
