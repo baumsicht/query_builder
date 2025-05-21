@@ -27,7 +27,7 @@ class QueryBuilderDialog(QDialog):
             | Qt.WindowMaximizeButtonHint
         )
 
-        self.setWindowTitle("QueryBuilder  –  v0.2.8")
+        self.setWindowTitle("QueryBuilder  –  v0.3.1")
         self.layout = QVBoxLayout(self)
 
         # Layer-Auswahl
@@ -126,8 +126,10 @@ class QueryBuilderDialog(QDialog):
 
     def create_input_widget(self, is_date, field_name=None):
         if is_date:
-            dt = QDateEdit(); dt.setCalendarPopup(True)
-            dt.setDisplayFormat("yyyy-MM-dd"); dt.setDate(QDate.currentDate())
+            dt = QDateEdit()
+            dt.setCalendarPopup(True)
+            dt.setDisplayFormat("yyyy-MM-dd")
+            dt.setDate(QDate.currentDate())
             return dt
         le = QLineEdit()
         if field_name:
@@ -157,7 +159,8 @@ class QueryBuilderDialog(QDialog):
 
     def add_group(self):
         grp = {}
-        frame = QFrame(); frame.setFrameShape(QFrame.StyledPanel)
+        frame = QFrame()
+        frame.setFrameShape(QFrame.StyledPanel)
         grp["frame"] = frame
         vbox = QVBoxLayout(frame)
         self.groups_container.addWidget(frame)
@@ -168,7 +171,8 @@ class QueryBuilderDialog(QDialog):
             op.setCurrentText("ODER")
         else:
             op.setCurrentText("UND"); op.setDisabled(True)
-        btn_dup = QPushButton("🗐"); btn_del = QPushButton("🗑️")
+        btn_dup = QPushButton("🗐")
+        btn_del = QPushButton("🗑️")
         hl.addWidget(QLabel("Verknüpfung:")); hl.addWidget(op)
         hl.addStretch(); hl.addWidget(btn_dup); hl.addWidget(btn_del)
         vbox.addLayout(hl)
@@ -191,7 +195,8 @@ class QueryBuilderDialog(QDialog):
 
 
     def add_condition(self, group):
-        blk = {}; hl = QHBoxLayout()
+        blk = {}
+        hl = QHBoxLayout()
 
         fld = QComboBox()
         for f in self.layer.fields():
@@ -214,7 +219,7 @@ class QueryBuilderDialog(QDialog):
         menu.addAction("Nur verwendete Werte")
         btn_vals.setMenu(menu); btn_vals.setPopupMode(QToolButton.InstantPopup)
         hl.addWidget(btn_vals)
-        # immer aktuelles inp1 referenzieren
+        # immer aktuelle in1-Instanz verwenden
         menu.triggered.connect(lambda action, b=blk:
             self.load_field_values(action.text(), b["fld"].currentData(), b["in1"])
         )
@@ -225,11 +230,8 @@ class QueryBuilderDialog(QDialog):
         container = QWidget(); container.setLayout(hl)
         group["conds"].addWidget(container)
 
-        blk.update({
-            "fld": fld, "op": op,
-            "in1": inp1, "in2": inp2,
-            "del_btn": btn_del, "container": container
-        })
+        blk.update({"fld": fld, "op": op, "in1": inp1, "in2": inp2,
+                    "del_btn": btn_del, "container": container})
         group["blocks"].append(blk)
 
         def update_widgets():
@@ -343,7 +345,7 @@ class QueryBuilderDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(self, "Filter speichern", "", "JSON Files (*.json*)")
         if not path:
             return
-        data = {"version": "v0.2.8", "groups": []}
+        data = {"version": "v0.3.1", "groups": []}
         for grp in self.groups:
             grp_data = {"op": grp["op"].currentText(), "blocks": []}
             for blk in grp["blocks"]:
@@ -441,5 +443,7 @@ class QueryBuilderDialog(QDialog):
 
         comp = QCompleter(sorted(str(v) for v in vals), self)
         comp.setCaseSensitivity(Qt.CaseInsensitive)
+        # Wenn ein Wert gewählt wird, ins LineEdit übernehmen
+        comp.activated[str].connect(lambda text, le=lineedit: le.setText(text))
         lineedit.setCompleter(comp)
         comp.complete()
