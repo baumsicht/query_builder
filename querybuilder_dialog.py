@@ -6,24 +6,26 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtCore import Qt, QDate
 from qgis.PyQt.QtGui import QGuiApplication
-from qgis.core import QgsProject, QgsField
+from qgis.core import QgsProject, QgsField, QgsVectorLayer
 
 
 class QueryBuilderDialog(QDialog):
     def __init__(self, layer):
         super().__init__()
-        self.setWindowTitle("QueryBuilder  –  v1.8")
+        self.setWindowTitle("QueryBuilder  –  v1.9")
         self.setMinimumWidth(600)
 
         # Main layout
         self.layout = QVBoxLayout(self)
 
-        # --- Layer-Auswahl oben ---
+        # --- Layer-Auswahl oben (nur Vektorlayer) ---
         hl_layer = QHBoxLayout()
         hl_layer.addWidget(QLabel("Layer:"))
         self.layer_combo = QComboBox()
         for lyr in QgsProject.instance().mapLayers().values():
-            self.layer_combo.addItem(lyr.name(), lyr.id())
+            if isinstance(lyr, QgsVectorLayer):
+                self.layer_combo.addItem(lyr.name(), lyr.id())
+        # aktiven Vektor-Layer voreinstellen, falls vorhanden
         idx = self.layer_combo.findData(layer.id())
         if idx != -1:
             self.layer_combo.setCurrentIndex(idx)
@@ -151,9 +153,7 @@ class QueryBuilderDialog(QDialog):
         grp["add"] = btn_add
         vbox.addWidget(btn_add)
 
-        grp.update({
-            "op": op, "dup": btn_dup, "del": btn_del, "blocks": []
-        })
+        grp.update({"op": op, "dup": btn_dup, "del": btn_del, "blocks": []})
         self.groups.append(grp)
 
         btn_add.clicked.connect(lambda _, g=grp: self.add_condition(g))
